@@ -6,6 +6,10 @@ import { createStore, INITIAL_STATE } from './app/store.js';
 import { buildAppearance, pathologyRoles } from './app/appearance.js';
 import { PATHOLOGY_BY_ID } from './data/pathologies.js';
 import { initPathologyList } from './ui/pathologies.js';
+import { AREA_BY_ID, areaName } from './data/areas.js';
+import { initAreaList } from './ui/areas.js';
+import { NATURAL } from './data/palettes.js';
+import { Color } from 'three';
 import { initStructureList } from './ui/structureList.js';
 import { initInfoPanel } from './ui/infoPanel.js';
 import { initToolbar } from './ui/toolbar.js';
@@ -53,16 +57,17 @@ const app = {
     if (s.mode !== 'explore') return;
     let selection = [id];
     if (multi) selection = s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [id, ...s.selection];
-    const patch = { selection, pathology: null };
+    const patch = { selection, pathology: null, area: null, ...restoreReveal(s) };
     if (fromList) {
       // Seleccionar desde la lista garantiza que la estructura sea visible
       const own = partsOf(id);
-      patch.hidden = s.hidden.filter((h) => !partsOf(h).some((p) => own.includes(p)));
+      patch.hidden = (patch.hidden ?? s.hidden).filter((h) => !partsOf(h).some((p) => own.includes(p)));
       if (s.isolate) {
         const iso = new Set(s.isolate.flatMap(partsOf));
         if (!own.every((p) => iso.has(p))) patch.isolate = null;
       }
-      if (s.hemisphere !== 'both' && own.every((p) => p.side !== 'C' && p.side !== s.hemisphere)) patch.hemisphere = 'both';
+      const hemi = patch.hemisphere ?? s.hemisphere;
+      if (hemi !== 'both' && own.every((p) => p.side !== 'C' && p.side !== hemi)) patch.hemisphere = 'both';
     }
     store.set(patch);
     updateLabel(hit);
@@ -155,6 +160,8 @@ const app = {
   setView(view) {
     const s = store.get();
     const patch = { view, category: null };
+    if (view !== 'areas') Object.assign(patch, { area: null }, restoreReveal(s));
+    else patch.pathology = null;
     if (view === 'interna') patch.depth = s.depth > 0 ? s.depth : 0.75;
     else patch.depth = 0;
     if (view === 'explodida') {
@@ -173,7 +180,7 @@ const app = {
   },
 
   setCategory(category) {
-    store.set({ category, pathology: null });
+    store.set({ category, pathology: null, area: null });
     if (category) announce(`Función resaltada: ${category}`);
   },
 
@@ -181,7 +188,7 @@ const app = {
   setPathology(id) {
     const s = store.get();
     store.set({
-      pathology: id, selection: [], category: null, isolate: null, hidden: [], hemisphere: 'both',
+      pathology: id, selection: [], category: null, area: null, areaReveal: [], isolate: null, hidden: [], hemisphere: 'both',
       depth: 0, view: s.view === 'interna' || s.view === 'limbica' ? 'anatomica' : s.view,
     });
     labels.hide();
@@ -210,6 +217,60 @@ const app = {
       pathologyLabelPending = false;
       updatePathologyLabel();
     }, 900);
+  },
+
+  // ---------------------------------------------------------------- áreas corticales
+  /** Selecciona un área cortical. `hit` (clic) fija el lado y el punto de la etiqueta. */
+  selectArea(id, { focus = false, hit = null } = {}) {
+    const s = store.get();
+    if (!id) {
+      store.set({ area: null, ...restoreReveal(s) });
+      return labels.hide();
+    }
+    const area = AREA_BY_ID[id];
+    const side = hit ? hit.part.side : area.lateral?.side || (viewer.cameraSide() < 0 ? 'L' : 'R');
+    store.set({
+      ...restoreReveal(s),
+      area: id, areaSide: side, selection: [], pathology: null, category: null,
+      view: 'areas', depth: 0, areaLevels: s.areaLevels.includes(area.level) ? s.areaLevels : [...s.areaLevels, area.level],
+    });
+    announce(`Área: ${areaName(area, side)}`);
+    if (hasDrawer() && !hit) document.body.classList.remove('show-left');
+    if (hit) labels.show({ part: hit.part, local: hit.point.clone().sub(hit.part.mesh.position) }, areaName(area, side), area.short);
+    if (focus) app.focusArea(id);
+    else if (!hit) updateAreaLabel();
+  },
+
+  /** Encuadra un área; puede mostrar un solo hemisferio o desarmar para verla. */
+  focusArea(id) {
+    const area = AREA_BY_ID[id];
+    if (!area) return;
+    const v = MODEL_CONFIG.areaViews[id] || MODEL_CONFIG.areaViews.default;
+    const cfg = Array.isArray(v) ? { dir: v } : v;
+    let s = store.get();
+    if (cfg.hemisphere && s.hemisphere !== cfg.hemisphere) store.set({ hemisphere: cfg.hemisphere, areaSide: cfg.hemisphere });
+    if (cfg.reveal) {
+      // Ocultar los lóbulos que tapan el área y mostrar solo su hemisferio
+      const side = s.areaSide || 'L';
+      const reveal = cfg.reveal.filter((r) => !s.hidden.includes(r));
+      store.set({ hidden: [...s.hidden, ...reveal], areaReveal: reveal, hemisphere: side, explode: 0 });
+    } else if (s.hidden.includes(area.lobe)) store.set({ hidden: s.hidden.filter((h) => h !== area.lobe) });
+    s = store.get();
+    const side = cfg.hemisphere || s.areaSide || 'L';
+    const region = viewer.areaRegion(viewer.areaIds.indexOf(id), viewer.parts.filter((p) => p.side === side));
+    if (!region) return;
+    const dir = [...cfg.dir];
+    if (!cfg.hemisphere) dir[0] = Math.abs(dir[0]) * (side === 'L' ? -1 : 1);
+    viewer.focusBox(region.box, dir);
+    areaLabelPending = true;
+    setTimeout(() => areaLabelPending && updateAreaLabel(), 1200);
+  },
+
+  setAreaLevels(areaLevels) {
+    const s = store.get();
+    const hideArea = s.area && !areaLevels.includes(AREA_BY_ID[s.area].level);
+    store.set({ areaLevels, ...(hideArea ? { area: null } : {}) });
+    if (hideArea) labels.hide();
   },
 
   setHemisphere(hemisphere) {
@@ -248,7 +309,7 @@ const app = {
 
   resetAll() {
     store.set({
-      selection: [], hidden: [], isolate: null, category: null, pathology: null, hemisphere: 'both',
+      selection: [], hidden: [], isolate: null, category: null, pathology: null, area: null, areaReveal: [], hemisphere: 'both',
       explode: 0, dragMode: false, depth: 0, view: 'anatomica', autoRotate: false,
       section: { ...INITIAL_STATE.section },
     });
@@ -270,7 +331,7 @@ const app = {
     if (isPhone()) document.body.classList.add('sheet-expanded');
     const q = newQuestion(setId);
     store.set({
-      mode: 'study', selection: [], hidden: [], isolate: null, category: null, pathology: null, explode: 0, dragMode: false,
+      mode: 'study', selection: [], hidden: [], isolate: null, category: null, pathology: null, area: null, explode: 0, dragMode: false,
       depth: 0, view: 'anatomica', section: { ...INITIAL_STATE.section }, autoRotate: false,
       hemisphere: questionHemisphere(q),
       quiz: { ...q, set: setId, score: { right: 0, total: 0 } },
@@ -311,6 +372,12 @@ const app = {
   },
 };
 
+/** Deshace el ocultamiento temporal de lóbulos hecho para mostrar un área. */
+function restoreReveal(s) {
+  if (!s.areaReveal?.length) return {};
+  return { hidden: s.hidden.filter((h) => !s.areaReveal.includes(h)), areaReveal: [], hemisphere: 'both' };
+}
+
 function questionHemisphere(q) {
   return q.kind === 'pathology' ? 'both' : focusView(q.current).hemisphere || 'both';
 }
@@ -337,6 +404,16 @@ function updateLabel(hit) {
     a ? labels.show(a, s.name, s.short) : labels.hide();
   }
 }
+let areaLabelPending = false;
+function updateAreaLabel() {
+  areaLabelPending = false;
+  const s = store.get();
+  const area = AREA_BY_ID[s.area];
+  if (!area) return;
+  const region = viewer.areaRegion(viewer.areaIds.indexOf(s.area), viewer.parts.filter((p) => p.side === (s.areaSide || 'L')));
+  if (region?.anchor) labels.show(region.anchor, areaName(area, s.areaSide), area.short);
+}
+
 let pathologyLabelPending = false;
 function updatePathologyLabel() {
   const p = PATHOLOGY_BY_ID[store.get().pathology];
@@ -350,7 +427,8 @@ function updatePathologyLabel() {
 viewer.on('cameraend', () => {
   const s = store.get();
   if (s.mode !== 'explore') return;
-  if (s.pathology && pathologyLabelPending) {
+  if (s.area && areaLabelPending) updateAreaLabel();
+  else if (s.pathology && pathologyLabelPending) {
     pathologyLabelPending = false;
     updatePathologyLabel();
   } else if (s.selection[0] && !labelFromClick) updateLabel(null);
@@ -364,6 +442,11 @@ viewer.on('pick', ({ hit, multi }) => {
     if (!multi) app.clearSelection();
     return;
   }
+  // En la vista por áreas, un clic sobre la corteza selecciona el área
+  if (s.view === 'areas' && hit.area != null && !multi) {
+    const id = viewer.areaIds[hit.area];
+    if (AREA_BY_ID[id]) return app.selectArea(id, { hit });
+  }
   app.select(hit.part.id, { multi, hit });
 });
 viewer.on('dblpick', ({ hit }) => store.get().mode === 'explore' && app.focus(hit.part.id));
@@ -374,7 +457,8 @@ viewer.on('dragend', () => updateLabel(null));
 viewer.on('hover', ({ hit, x, y }) => {
   const s = store.get();
   if (s.mode !== 'explore' || !hit) return labels.tip(0, 0, null);
-  labels.tip(x, y, STRUCTURE_BY_ID[hit.part.id]?.name);
+  const area = s.view === 'areas' && hit.area != null ? AREA_BY_ID[viewer.areaIds[hit.area]] : null;
+  labels.tip(x, y, area ? areaName(area, hit.part.side) : STRUCTURE_BY_ID[hit.part.id]?.name);
 });
 viewer.renderer.domElement.addEventListener('pointerdown', () => $('#hint')?.classList.add('is-gone'), { once: true });
 viewer.dragGroup = (part) => [part];
@@ -387,6 +471,32 @@ const renderQuiz = initQuiz($('#info'), app);
 const renderToolbar = initToolbar($('#controls'), app);
 const renderLegend = initLegend($('#legend'), app);
 const renderPathologies = initPathologyList($('#pane-pathologies'), app);
+const renderAreas = initAreaList($('#pane-areas'), app);
+
+/** Colorea la corteza por áreas según los niveles visibles y el área seleccionada. */
+let lastPaint = '';
+const WHITE = new Color('#ffffff');
+const OFF = new Color('#e8e0d9');
+function paintAreas(s) {
+  if (s.view !== 'areas') return;
+  const key = `${s.area}|${s.areaSide}|${s.areaLevels.join()}`;
+  if (key === lastPaint) return;
+  lastPaint = key;
+  const cache = new Map();
+  viewer.paintAreas((idx, part) => {
+    if (idx == null) return new Color(NATURAL[part.id] || '#dddddd');
+    const area = AREA_BY_ID[viewer.areaIds[idx]];
+    if (!area || !s.areaLevels.includes(area.level)) return OFF;
+    const selected = s.area === area.id && (!s.areaSide || part.side === s.areaSide);
+    const k = `${area.id}|${s.area && !selected}`;
+    if (!cache.has(k)) {
+      const c = new Color(area.color);
+      if (s.area && !selected) c.lerp(WHITE, 0.6);
+      cache.set(k, c);
+    }
+    return cache.get(k);
+  });
+}
 initOrientation($('#orientation'), viewer);
 
 const viewButtons = [...document.querySelectorAll('[data-view]')];
@@ -407,10 +517,10 @@ function renderChrome(s) {
   $('#view-select').value = s.view;
   document.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.mode === s.mode));
   document.body.classList.toggle('is-study', s.mode === 'study');
-  document.body.classList.toggle('has-selection', s.mode === 'study' || s.selection.length > 0 || !!s.pathology);
+  document.body.classList.toggle('has-selection', s.mode === 'study' || s.selection.length > 0 || !!s.pathology || !!s.area);
   $('#btn-left').setAttribute('aria-expanded', document.body.classList.contains('show-left'));
   $('#sheet-handle').setAttribute('aria-expanded', document.body.classList.contains('sheet-expanded'));
-  const sel = s.mode === 'study' ? 'Estudiar' : s.pathology ? PATHOLOGY_BY_ID[s.pathology].name : s.selection[0] ? STRUCTURE_BY_ID[s.selection[0]].name : 'Información';
+  const sel = s.mode === 'study' ? 'Estudiar' : s.pathology ? PATHOLOGY_BY_ID[s.pathology].name : s.area ? areaName(AREA_BY_ID[s.area], s.areaSide) : s.selection[0] ? STRUCTURE_BY_ID[s.selection[0]].name : 'Información';
   $('#sheet-title').textContent = sel;
   updateInset();
 }
@@ -439,6 +549,8 @@ store.subscribe((s) => {
   renderToolbar(s);
   renderLegend(s);
   renderPathologies(s);
+  renderAreas(s);
+  paintAreas(s);
   // Si la pieza que ancla la etiqueta deja de verse, buscar otro anclaje
   const a = labels.anchor;
   if (s.mode === 'explore' && a && a.part.tgt.opacity === 0 && s.selection[0]) {
@@ -455,6 +567,7 @@ document.addEventListener('keydown', (e) => {
     document.body.classList.remove('show-left');
     if (s.mode === 'explore') {
       if (s.pathology) app.setPathology(null);
+      if (s.area) app.selectArea(null);
       app.clearSelection();
     }
     return;

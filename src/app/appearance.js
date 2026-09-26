@@ -91,6 +91,9 @@ export function buildAppearance(state, { partsOf, parts }) {
       }
     }
     if (roles) ({ color, opacity } = pathologyStyle(roles, part, opacity));
+    // Vista por áreas: la corteza se colorea por vértice (el color del material queda en blanco)
+    const vertexColors = state.view === 'areas' && !roles && !category && part.layer === 'cortex';
+    if (vertexColors) color = '#ffffff';
     // Al desarmar, la sustancia blanca queda translúcida para no tapar las piezas profundas
     if (part.layer === 'white' && state.explode > 0.2 && !selected.has(part)) opacity = Math.min(opacity, 0.16);
     // Rayos X: al seleccionar algo profundo, las capas externas se vuelven translúcidas
@@ -113,6 +116,7 @@ export function buildAppearance(state, { partsOf, parts }) {
       outline: isSelected && visible,
       pickable: opacity > 0.5,
       clip: state.hemisphere !== 'both' && part.side === 'C' ? state.hemisphere : null,
+      vertexColors,
     };
   };
 }

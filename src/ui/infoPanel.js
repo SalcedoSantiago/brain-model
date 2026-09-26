@@ -3,6 +3,8 @@ import { CATEGORY_BY_ID } from '../data/categories.js';
 import { ICONS } from './icons.js';
 import { PATHOLOGY_BY_ID } from '../data/pathologies.js';
 import { pathologyCard, relatedPathologiesSection } from './pathologies.js';
+import { AREA_BY_ID } from '../data/areas.js';
+import { areaCard } from './areas.js';
 
 /** Panel derecho: ficha educativa de la estructura seleccionada. */
 export function initInfoPanel(root, app) {
@@ -24,16 +26,20 @@ export function initInfoPanel(root, app) {
     if (action === 'patho-focus') app.focusPathology();
     if (action === 'patho-close') app.setPathology(null);
     if (action === 'patho-structure') app.focus(id);
+    if (action === 'area') app.selectArea(id, { focus: true });
+    if (action === 'area-focus') app.focusArea(app.store.get().area);
+    if (action === 'area-close') app.selectArea(null);
   });
 
   let lastKey = '';
   return function render(state) {
     if (state.mode !== 'explore') return;
     const id = state.selection[0];
-    const key = `${state.pathology}|${id}|${state.hidden.join()}|${(state.isolate || []).join()}|${state.selection.length}`;
+    const key = `${state.pathology}|${state.area}|${state.areaSide}|${id}|${state.hidden.join()}|${(state.isolate || []).join()}|${state.selection.length}`;
     if (key === lastKey) return;
     lastKey = key;
     if (state.pathology) root.innerHTML = pathologyCard(PATHOLOGY_BY_ID[state.pathology]);
+    else if (state.area) root.innerHTML = areaCard(AREA_BY_ID[state.area], state.areaSide);
     else root.innerHTML = id ? detail(STRUCTURE_BY_ID[id], state, app) : welcome();
     root.scrollTop = 0;
   };
@@ -49,6 +55,7 @@ function welcome() {
         <li><strong>Rota</strong> arrastrando y haz <strong>zoom</strong> con la rueda o con dos dedos.</li>
         <li><strong>Desarma</strong> el cerebro con el botón ${ICONS.explode.replace('width="18" height="18"', 'width="15" height="15"')} o activa ${ICONS.hand.replace('width="18" height="18"', 'width="15" height="15"')} <em>Mover piezas</em> para sacar cada parte con el ratón o el dedo.</li>
         <li>Usa la <strong>vista interna</strong> o el <strong>corte</strong> para descubrir las estructuras profundas.</li>
+        <li>En la pestaña <strong>Áreas</strong> verás la división en áreas primarias, secundarias y terciarias.</li>
         <li>En la pestaña <strong>Patologías</strong> verás qué partes del cerebro se afectan en cada enfermedad o trastorno.</li>
       </ol>
       <div class="legend-types">

@@ -285,6 +285,66 @@ function lobeRegions(x, y, z) {
   return { lobulo_frontal: F, lobulo_parietal: P, lobulo_temporal: T, lobulo_occipital: O, insula: I, giro_cingulado: C, wall: Wc };
 }
 
+/**
+ * Áreas corticales (clasificación jerárquica de Luria + zonas paralímbicas de
+ * Mesulam). Se guardan por vértice en el atributo _AREA de cada lóbulo; la
+ * lista de ids va en scenes[0].extras.areas. 255 = superficie interna (corte).
+ * Las fronteras son aproximadas y siguen los surcos del modelo.
+ */
+const AREA_IDS = [
+  'motora_primaria', 'somatosensorial_primaria', 'auditiva_primaria', 'visual_primaria',
+  'premotora', 'broca', 'somatosensorial_asociacion', 'auditiva_asociacion', 'wernicke', 'visual_asociacion', 'temporal_inferior',
+  'prefrontal_dorsolateral', 'prefrontal_ventromedial', 'parieto_temporo_occipital', 'temporal_media',
+  'cingular', 'insular', 'temporal_medial_polar',
+];
+const AREA_INDEX = Object.fromEntries(AREA_IDS.map((id, i) => [id, i]));
+const INTERIOR = 255;
+
+function corticalArea(lobe, x, y, z) {
+  const zc = zCS(y);
+  switch (lobe) {
+    case 'lobulo_frontal':
+      if (z < zc + 1.35 && y > 0.1) return 'motora_primaria'; // giro precentral y lobulillo paracentral anterior
+      if (x > 3.6 && z > zc + 1.0 && z < 4.7 && y < 1.55 - 0.08 * z && y > ySyl(z) - 0.3) return 'broca'; // giro frontal inferior posterior
+      if (z < zc + 2.7 && y > 0.5) return 'premotora'; // incluye el área motora suplementaria medial
+      if ((y < 0.6 && z > 2.5) || x < 1.3 || z > 7.3) return 'prefrontal_ventromedial';
+      return 'prefrontal_dorsolateral';
+    case 'lobulo_parietal':
+      if (z > zc - 1.25) return 'somatosensorial_primaria'; // giro poscentral
+      if (x < 3.7) return 'somatosensorial_asociacion'; // lobulillo parietal superior y precúneo
+      return 'parieto_temporo_occipital'; // lobulillo parietal inferior: supramarginal y angular
+    case 'lobulo_temporal': {
+      const ys = yClass(z);
+      if (z > 3.4 || (x < 3.0 && y < ys - 1.0)) return 'temporal_medial_polar';
+      if (y > ys - 0.45 && x < 5.0 && z > -2.0 && z < 0.7) return 'auditiva_primaria'; // giros de Heschl en el plano temporal superior
+      if (y > ys - 1.25) return z < -1.6 && z > -3.8 ? 'wernicke' : 'auditiva_asociacion';
+      if (y > ys - 2.45 && x > 4.3) return 'temporal_media';
+      return 'temporal_inferior';
+    }
+    case 'lobulo_occipital':
+      if ((x < 1.7 && Math.abs(y - (0.3 - 0.06 * (z + 3.8))) < 0.95 && z < -4.4) || z < -8.0) return 'visual_primaria'; // surco calcarino y polo
+      return 'visual_asociacion';
+    case 'giro_cingulado':
+      return 'cingular';
+    case 'insula':
+      return 'insular';
+  }
+  return null;
+}
+
+/** Etiqueta cada vértice de la superficie externa (pial) con su área cortical. */
+function labelAreas(mesh, lobe) {
+  const n = mesh.pos.length / 3;
+  mesh.area = new Uint8Array(n);
+  for (let v = 0; v < n; v++) {
+    const x = mesh.pos[v * 3], y = mesh.pos[v * 3 + 1], z = mesh.pos[v * 3 + 2];
+    const pial = Math.abs(sdHemisphere(x, y, z)) < 0.15;
+    const id = pial ? corticalArea(lobe, x, y, z) : null;
+    mesh.area[v] = id ? AREA_INDEX[id] : INTERIOR;
+  }
+  return mesh;
+}
+
 // ---------------------------------------------------------------------------
 // Estructuras profundas, tronco y cerebelo
 // ---------------------------------------------------------------------------
@@ -478,7 +538,7 @@ function mirrorX(m) {
   const pos = m.pos.slice(), nor = m.nor.slice(), ind = m.ind.slice();
   for (let i = 0; i < pos.length; i += 3) { pos[i] = -pos[i]; nor[i] = -nor[i]; }
   for (let t = 0; t < ind.length; t += 3) { const s = ind[t + 1]; ind[t + 1] = ind[t + 2]; ind[t + 2] = s; }
-  return { pos, nor, ind };
+  return { pos, nor, ind, area: m.area?.slice() };
 }
 /** Suavizado de Taubin (reduce el escalonado sin encoger la malla). */
 function taubin(m, iters = 2, lambda = 0.5, mu = -0.53) {
@@ -522,13 +582,15 @@ function optimizeMesh(m, ratio) {
   ind = Uint32Array.from(ind);
   const [remap, unique] = MeshoptEncoder.reorderMesh(ind, true, false);
   const pos = new Float32Array(unique * 3), nor = new Float32Array(unique * 3);
+  const area = m.area ? new Uint8Array(unique) : null;
   for (let v = 0; v < remap.length; v++) {
     const r = remap[v];
     if (r === 0xffffffff) continue;
     pos.set(m.pos.subarray(v * 3, v * 3 + 3), r * 3);
     nor.set(m.nor.subarray(v * 3, v * 3 + 3), r * 3);
+    if (area) area[r] = m.area[v];
   }
-  return { pos, nor, ind };
+  return { pos, nor, ind, area };
 }
 
 function writeGLB(parts, file) {
@@ -538,7 +600,7 @@ function writeGLB(parts, file) {
     extensionsUsed: ['KHR_mesh_quantization', EXT],
     extensionsRequired: ['KHR_mesh_quantization', EXT],
     scene: 0,
-    scenes: [{ name: 'Encefalo', nodes: [] }],
+    scenes: [{ name: 'Encefalo', nodes: [], extras: { areas: AREA_IDS } }],
     nodes: [], meshes: [], materials: [], accessors: [], bufferViews: [],
     buffers: [{ byteLength: 0 }, { byteLength: 0, extensions: { [EXT]: { fallback: true } } }],
   };
@@ -591,7 +653,15 @@ function writeGLB(parts, file) {
       json.materials.push({ name: structureId, pbrMetallicRoughness: { baseColorFactor: [...hexToLinear(color), 1], metallicFactor: 0, roughnessFactor: 0.72 } });
       matIndex.set(structureId, json.materials.length - 1);
     }
-    json.meshes.push({ name, primitives: [{ attributes: { POSITION: pAcc, NORMAL: nAcc }, indices: iAcc, material: matIndex.get(structureId) }] });
+    const attributes = { POSITION: pAcc, NORMAL: nAcc };
+    if (mesh.area) {
+      // Atributo propio (prefijo _): índice de área cortical por vértice, relleno a 4 bytes
+      const aq = new Uint8Array(vc * 4);
+      for (let v = 0; v < vc; v++) aq[v * 4] = mesh.area[v];
+      json.accessors.push({ bufferView: addView(aq, 34962, 4, vc, 'ATTRIBUTES'), componentType: 5121, count: vc, type: 'SCALAR' });
+      attributes._AREA = json.accessors.length - 1;
+    }
+    json.meshes.push({ name, primitives: [{ attributes, indices: iAcc, material: matIndex.get(structureId) }] });
     json.nodes.push({ name, mesh: json.meshes.length - 1, scale: [POS_SCALE, POS_SCALE, POS_SCALE], extras: { structureId, side } });
     json.scenes[0].nodes.push(json.nodes.length - 1);
   }
@@ -644,7 +714,7 @@ await MeshoptSimplifier.ready;
 console.log('Hemisferio cerebral (corteza)…');
 // Cada lóbulo es un sólido: hemisferio ∩ región del lóbulo, sin el núcleo de sustancia blanca
 const lobes = solidPieces(sdHemisphere, lobeRegions, LOBE_IDS, [0, -4.8, -9.2], [7.3, 7.0, 8.9], 0.1, (b, x, y, z) => Math.max(b, -(sdWhiteMatter(x, y, z) + 0.06)));
-for (const id of LOBE_IDS) addBilateral(id, taubin(lobes[id], 2));
+for (const id of LOBE_IDS) addBilateral(id, labelAreas(taubin(lobes[id], 2), id));
 console.log('Sustancia blanca…');
 const sdWhitePiece = (x, y, z) => Math.min(sdWhiteMatter(x, y, z), Math.max(sdHemisphere(x, y, z), ellNorm(x, y, z, H.dienc) - 1.08));
 addBilateral('sustancia_blanca', taubin(marchingCubes(sdWhitePiece, [0, -4.8, -9.2], [7.3, 7.0, 8.9], 0.14), 2));

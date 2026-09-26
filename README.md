@@ -18,6 +18,7 @@ npm run generate:model   # regenera public/models/brain.glb
 - **Vistas**: anatómica, por lóbulos, interna (retira la corteza y la sustancia blanca por capas), límbica, funcional y desarmada.
 - **Corte**: planos sagital, coronal y axial con posición regulable; las superficies de corte se muestran sólidas.
 - **Hemisferios**: ambos, izquierdo o derecho (con corte en la línea media para ver la cara medial).
+- **Áreas corticales**: vista y pestaña «Áreas» con 18 áreas en niveles jerárquicos: **primarias** (M1, S1, A1, V1), **secundarias** o de asociación unimodal (premotora, Broca, Wernicke, asociación somatosensorial, auditiva y visual, temporal inferior), **terciarias** o de asociación multimodal (prefrontal dorsolateral y ventromedial, zona parieto-temporo-occipital, temporal media) y **paralímbicas** (cíngulo, ínsula, polo y corteza temporal medial). Cada ficha incluye nivel (Luria), áreas de Brodmann, función, efecto de una lesión y relación con la Psicología. Las áreas ocultas (A1, ínsula) se muestran ocultando los lóbulos que las cubren.
 - **Funciones**: filtra y resalta las estructuras implicadas en memoria, emociones, lenguaje, etc.
 - **Patologías**: 29 enfermedades y trastornos (neurodegenerativos, cerebrovasculares, síndromes focales, epilepsia, psiquiátricos, del neurodesarrollo…). Al elegir una, el modelo resalta en rojo las estructuras principalmente afectadas y en ámbar las relacionadas, respetando la lateralización (p. ej., afasia de Broca en el hemisferio izquierdo). Se puede filtrar por estructura afectada y cada ficha de estructura enlaza sus patologías. Se distingue entre **lesión o degeneración** y **asociación en estudios** (trastornos psiquiátricos y del neurodesarrollo).
 - **Estudiar**: preguntas «¿Qué estructura es esta?» con explicación; temas por lóbulos, estructuras subcorticales, sistema límbico, tronco y cerebelo, por función, o «Patologías: ¿qué estructura se afecta?».
@@ -30,6 +31,7 @@ src/
   data/
     structures.js    Contenido educativo (ubicación, función, relación psicológica, ejemplo…)
     categories.js    Categorías funcionales
+    areas.js         Áreas corticales y niveles (primarias, secundarias, terciarias, paralímbicas)
     pathologies.js   Patologías: estructuras afectadas (principal / relacionada, lado), mecanismo, síntomas…
     modelConfig.js   Todo lo que depende del GLB: nombres de mallas, capas, explosión, cámaras
     palettes.js      Colores por modo de visualización
@@ -61,7 +63,7 @@ Las mallas sin correspondencia se ignoran y se avisa en la consola. Los ids disp
 
 ### El modelo procedural
 
-`scripts/generate-brain.mjs` define cada estructura como un campo de distancia (SDF) y la poligoniza con *marching cubes*. Cada lóbulo es un **sólido cerrado** (hemisferio ∩ región del lóbulo ∖ sustancia blanca), de modo que las piezas encajan y conservan volumen al desarmarlas. La malla se simplifica y se comprime con meshoptimizer (`EXT_meshopt_compression` + `KHR_mesh_quantization`, ~2,3 MB).
+`scripts/generate-brain.mjs` define cada estructura como un campo de distancia (SDF) y la poligoniza con *marching cubes*. Cada lóbulo es un **sólido cerrado** (hemisferio ∩ región del lóbulo ∖ sustancia blanca), de modo que las piezas encajan y conservan volumen al desarmarlas. Cada vértice de la superficie cortical guarda su área en el atributo `_AREA` (lista de ids en `scenes[0].extras.areas`); un modelo sustituto puede aportar su propia parcelación con el mismo formato. La malla se simplifica y se comprime con meshoptimizer (`EXT_meshopt_compression` + `KHR_mesh_quantization`, ~2,3 MB).
 
 ## Nota sobre el contenido
 

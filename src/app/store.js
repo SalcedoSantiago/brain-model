@@ -18,12 +18,16 @@ export function createStore(initial) {
 
 export const INITIAL_STATE = {
   mode: 'explore', // explore | study
-  view: 'anatomica', // anatomica | lobulos | interna | limbica | funcional | explodida
+  view: 'anatomica', // anatomica | lobulos | areas | interna | limbica | funcional | explodida
   selection: [], // ids seleccionados (el primero es el principal)
   hidden: [], // ids ocultos (estructuras o grupos)
   isolate: null, // ids aislados o null
   category: null, // categoría funcional resaltada
   pathology: null, // patología resaltada
+  area: null, // área cortical seleccionada (vista por áreas)
+  areaSide: null, // hemisferio del área seleccionada ('L' | 'R')
+  areaReveal: [], // lóbulos ocultados temporalmente para ver un área
+  areaLevels: ['primaria', 'secundaria', 'terciaria', 'paralimbica'], // niveles visibles
   hemisphere: 'both', // both | L | R
   explode: 0, // 0..1
   dragMode: false, // arrastrar piezas para desarmar

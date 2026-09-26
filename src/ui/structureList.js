@@ -11,6 +11,7 @@ export function initStructureList(root, app) {
     <div class="panel-tabs" role="tablist" aria-label="Navegación">
       <button role="tab" id="tab-structures" aria-controls="pane-structures" aria-selected="true" class="panel-tab">Estructuras</button>
       <button role="tab" id="tab-functions" aria-controls="pane-functions" aria-selected="false" class="panel-tab" tabindex="-1">Funciones</button>
+      <button role="tab" id="tab-areas" aria-controls="pane-areas" aria-selected="false" class="panel-tab" tabindex="-1">Áreas</button>
       <button role="tab" id="tab-pathologies" aria-controls="pane-pathologies" aria-selected="false" class="panel-tab" tabindex="-1">Patologías</button>
     </div>
     <div id="pane-structures" role="tabpanel" aria-labelledby="tab-structures" class="panel-pane">
@@ -26,12 +27,14 @@ export function initStructureList(root, app) {
       <div class="category-list" role="list"></div>
       <div class="category-detail"></div>
     </div>
+    <div id="pane-areas" role="tabpanel" aria-labelledby="tab-areas" class="panel-pane" hidden></div>
     <div id="pane-pathologies" role="tabpanel" aria-labelledby="tab-pathologies" class="panel-pane" hidden></div>`;
 
   const tabs = [...root.querySelectorAll('[role=tab]')];
   const panes = {
     'tab-structures': root.querySelector('#pane-structures'),
     'tab-functions': root.querySelector('#pane-functions'),
+    'tab-areas': root.querySelector('#pane-areas'),
     'tab-pathologies': root.querySelector('#pane-pathologies'),
   };
   const selectTab = (tab) => {
@@ -54,7 +57,10 @@ export function initStructureList(root, app) {
     });
   });
   app.showFunctionsTab = () => selectTab(tabs[1]);
-  app.showPathologiesTab = () => selectTab(tabs[2]);
+  app.showAreasTab = () => selectTab(tabs[2]);
+  app.showPathologiesTab = () => selectTab(tabs[3]);
+  // Abrir la pestaña «Áreas» activa la vista por áreas
+  tabs[2].addEventListener('click', () => app.store.get().view !== 'areas' && app.setView('areas'));
 
   // ---------------------------------------------------------------- estructuras
   const sectionsEl = root.querySelector('.structure-sections');

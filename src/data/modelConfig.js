@@ -102,6 +102,34 @@ export const MODEL_CONFIG = {
     hemisferio_derecho: [1, 0.35, 0.3],
   },
 
+  /**
+   * Encuadre de cada área cortical (vista por áreas). Igual que focusViews;
+   * `reveal` oculta temporalmente los lóbulos que la tapan (áreas escondidas en
+   * la cisura lateral) y muestra un solo hemisferio. Las áreas lateralizadas se
+   * muestran en su hemisferio.
+   */
+  areaViews: {
+    default: [-0.85, 0.4, 0.3],
+    motora_primaria: [-0.7, 0.75, 0.2],
+    somatosensorial_primaria: [-0.7, 0.75, -0.1],
+    auditiva_primaria: { dir: [-0.45, 0.88, 0.15], reveal: ['lobulo_frontal', 'lobulo_parietal', 'sustancia_blanca', 'insula'] },
+    visual_primaria: { dir: [0.75, 0.15, -0.65], hemisphere: 'L' },
+    premotora: [-0.6, 0.7, 0.45],
+    broca: [-1, 0.1, 0.35],
+    somatosensorial_asociacion: [-0.4, 0.85, -0.4],
+    auditiva_asociacion: [-1, 0.05, 0.2],
+    wernicke: [-1, 0.1, -0.2],
+    visual_asociacion: [-0.6, 0.2, -0.8],
+    temporal_inferior: [-0.7, -0.6, 0.1],
+    prefrontal_dorsolateral: [-0.6, 0.4, 0.75],
+    prefrontal_ventromedial: [-0.35, -0.55, 0.75],
+    parieto_temporo_occipital: [-0.9, 0.3, -0.4],
+    temporal_media: [-1, -0.1, 0.1],
+    cingular: { dir: [1, 0.3, 0.1], hemisphere: 'L' },
+    insular: { dir: [-1, 0.15, 0.1], reveal: ['lobulo_frontal', 'lobulo_parietal', 'lobulo_temporal', 'sustancia_blanca'] },
+    temporal_medial_polar: [-0.5, -0.8, 0.4],
+  },
+
   /** Vistas predefinidas de la cámara. */
   cameraPresets: {
     inicial: { dir: [-0.8, 0.38, 0.48], label: 'Vista inicial' },

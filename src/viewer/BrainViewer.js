@@ -144,6 +144,8 @@ export class BrainViewer {
 
   #buildParts(sceneRoot) {
     sceneRoot.updateMatrixWorld(true);
+    // Lista de áreas corticales del modelo (índice → id), si el modelo la incluye
+    this.areaIds = sceneRoot.userData?.areas || [];
     const t = this.config.transform || {};
     const rot = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...(t.rotation || [0, 0, 0]).map(THREE.MathUtils.degToRad)));
     const meshes = [];
@@ -171,6 +173,12 @@ export class BrainViewer {
       g.setAttribute('position', toFloat(src.getAttribute('position')));
       if (src.getAttribute('normal')) g.setAttribute('normal', toFloat(src.getAttribute('normal')));
       if (src.index) g.setIndex(new THREE.BufferAttribute(src.index.array.slice(), 1));
+      const areaAttr = src.getAttribute('_area');
+      if (areaAttr) {
+        const area = new Uint8Array(areaAttr.count);
+        for (let i = 0; i < areaAttr.count; i++) area[i] = areaAttr.getX(i);
+        g.userData.area = area;
+      }
       g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(rot, mesh.matrixWorld));
       if (!g.getAttribute('normal')) g.computeVertexNormals();
       raw.push({ info, g, name: mesh.name });
@@ -216,6 +224,10 @@ export class BrainViewer {
         clipKey: '',
         outline: null,
       };
+      if (g.userData.area) {
+        part.area = g.userData.area;
+        part.areaBorder = areaBorders(part.area, g.index);
+      }
       mesh.userData.part = part;
       this.root.add(mesh);
       this.parts.push(part);
@@ -297,6 +309,7 @@ export class BrainViewer {
       p.tgt.outline = !!t.outline;
       p.tgt.pickable = t.pickable !== false;
       p.tgt.clip = t.clip || null;
+      p.tgt.vertexColors = !!t.vertexColors && !!p.area;
     }
     this.#updateClipping();
     this.#startAnimation();
@@ -341,6 +354,10 @@ export class BrainViewer {
     const visible = c.opacity > 0.01;
     p.mesh.visible = visible;
     m.color.copy(c.color);
+    if (m.vertexColors !== p.tgt.vertexColors) {
+      m.vertexColors = p.tgt.vertexColors;
+      m.needsUpdate = true;
+    }
     m.emissive.copy(this.selectionColor).multiplyScalar(c.emissive);
     const transparent = c.opacity < 0.995;
     if (m.transparent !== transparent) {
@@ -372,6 +389,88 @@ export class BrainViewer {
       p.outline.visible = true;
       p.outline.material.clippingPlanes = m.clippingPlanes;
     } else if (p.outline) p.outline.visible = false;
+  }
+
+  // ------------------------------------------------------------------ áreas corticales
+  /**
+   * Pinta los vértices de las piezas con áreas. `colorFor(areaIndex|null, part)`
+   * devuelve un THREE.Color (null = superficie interna). Los bordes entre áreas
+   * se oscurecen para que la parcelación se lea con claridad.
+   */
+  paintAreas(colorFor) {
+    const c = new THREE.Color();
+    for (const p of this.parts) {
+      if (!p.area) continue;
+      const g = p.mesh.geometry;
+      let attr = g.getAttribute('color');
+      if (!attr) {
+        attr = new THREE.BufferAttribute(new Float32Array(p.area.length * 3), 3);
+        g.setAttribute('color', attr);
+      }
+      const arr = attr.array;
+      const cache = new Map();
+      for (let v = 0; v < p.area.length; v++) {
+        const idx = p.area[v];
+        let base = cache.get(idx);
+        if (!base) cache.set(idx, (base = colorFor(idx === 255 ? null : idx, p).clone()));
+        c.copy(base);
+        if (p.areaBorder[v]) c.multiplyScalar(0.62);
+        arr[v * 3] = c.r;
+        arr[v * 3 + 1] = c.g;
+        arr[v * 3 + 2] = c.b;
+      }
+      attr.needsUpdate = true;
+    }
+    this.requestRender();
+  }
+
+  /** Vértices de un área (en las piezas indicadas): caja envolvente y ancla para la etiqueta. */
+  areaRegion(areaIndex, parts) {
+    const box = new THREE.Box3();
+    const v = new THREE.Vector3();
+    const sum = new THREE.Vector3();
+    let n = 0;
+    for (const p of parts) {
+      if (!p.area) continue;
+      const pos = p.mesh.geometry.getAttribute('position');
+      for (let i = 0; i < p.area.length; i++) {
+        if (p.area[i] !== areaIndex) continue;
+        v.fromBufferAttribute(pos, i).add(this.#finalOffset(p));
+        box.expandByPoint(v);
+        sum.add(v);
+        n++;
+      }
+    }
+    if (!n) return null;
+    const centroid = sum.divideScalar(n);
+    // Ancla: el vértice del área más cercano a su centroide
+    let best = null, bestD = Infinity;
+    for (const p of parts) {
+      if (!p.area) continue;
+      const pos = p.mesh.geometry.getAttribute('position');
+      for (let i = 0; i < p.area.length; i++) {
+        if (p.area[i] !== areaIndex) continue;
+        v.fromBufferAttribute(pos, i).add(this.#finalOffset(p));
+        const d = v.distanceToSquared(centroid);
+        if (d < bestD) {
+          bestD = d;
+          best = { part: p, local: v.clone().sub(this.#finalOffset(p)) };
+        }
+      }
+    }
+    return { box, anchor: best };
+  }
+
+  /** Desplazamiento que tendrá la pieza al terminar las animaciones (explosión + arrastre). */
+  #finalOffset(p) {
+    return p.explodeOffset.clone().multiplyScalar(this.explodeTarget).add(p.manualTarget);
+  }
+
+  /** Encuadra una caja (coordenadas del mundo) mirando desde `dir`. */
+  focusBox(box, dir) {
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    const distance = Math.max(this.fitDistance(sphere.radius) * 1.3, this.radius * 2.4);
+    this.viewFrom(dir, { target: sphere.center, distance: Math.min(distance, this.fitDistance(this.radius) * 1.1) });
   }
 
   // ------------------------------------------------------------------ corte
@@ -512,7 +611,14 @@ export class BrainViewer {
       const part = h.object.userData.part;
       const planes = part.material.clippingPlanes || [];
       if (planes.some((pl) => pl.distanceToPoint(h.point) < 0)) continue;
-      return { part, point: h.point.clone() };
+      let area = null;
+      if (part.area && h.face) {
+        const { a, b, c } = h.face;
+        const vals = [part.area[a], part.area[b], part.area[c]];
+        const idx = vals[0] === vals[1] || vals[0] === vals[2] ? vals[0] : vals[1];
+        area = idx === 255 ? null : idx;
+      }
+      return { part, point: h.point.clone(), area };
     }
     return null;
   }
@@ -743,4 +849,16 @@ export class BrainViewer {
 
 function colorsClose(a, b) {
   return Math.abs(a.r - b.r) < 0.002 && Math.abs(a.g - b.g) < 0.002 && Math.abs(a.b - b.b) < 0.002;
+}
+
+/** Marca los vértices de triángulos que cruzan una frontera entre áreas. */
+function areaBorders(area, index) {
+  const border = new Uint8Array(area.length);
+  if (!index) return border;
+  const idx = index.array;
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t], b = idx[t + 1], c = idx[t + 2];
+    if (area[a] !== area[b] || area[a] !== area[c]) border[a] = border[b] = border[c] = 1;
+  }
+  return border;
 }
