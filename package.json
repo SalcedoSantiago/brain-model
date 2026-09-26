@@ -1,0 +1,21 @@
+{
+  "name": "neuroatlas-3d",
+  "version": "1.0.0",
+  "description": "Atlas 3D interactivo del encéfalo para estudiantes de Psicología",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "generate:model": "node scripts/generate-brain.mjs"
+  },
+  "type": "module",
+  "dependencies": {
+    "three": "^0.186.1",
+    "three-mesh-bvh": "^0.9.15"
+  },
+  "devDependencies": {
+    "meshoptimizer": "^1.3.0",
+    "vite": "^8.3.1"
+  },
+  "private": true
+}
