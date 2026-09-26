@@ -1,6 +1,7 @@
 import { STRUCTURE_BY_ID } from '../data/structures.js';
 import { CATEGORY_BY_ID } from '../data/categories.js';
-import { NATURAL, LOBES, LIMBIC, GHOST_COLOR, NEUTRAL } from '../data/palettes.js';
+import { NATURAL, LOBES, LIMBIC, GHOST_COLOR, NEUTRAL, PATHOLOGY_PRINCIPAL, PATHOLOGY_RELATED } from '../data/palettes.js';
+import { PATHOLOGY_BY_ID } from '../data/pathologies.js';
 
 const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
 const mix = (a, b, t) => a + (b - a) * t;
@@ -15,6 +16,35 @@ export function colorFor(id, view) {
   }
   if (view === 'limbica') return LIMBIC[id] || NATURAL[id] || NEUTRAL;
   return NATURAL[id] || NEUTRAL;
+}
+
+/**
+ * Piezas afectadas por una patología → 'principal' | 'relacionada'.
+ * Respeta la lateralización (`side`) de cada estructura afectada.
+ */
+export function pathologyRoles(pathology, partsOf) {
+  const roles = new Map();
+  for (const a of pathology.affected) {
+    // Solo las mallas propias de la estructura (p. ej. «sustancia blanca» sin el cuerpo calloso)
+    for (const part of partsOf(a.id).filter((p) => p.id === a.id)) {
+      if (a.side && part.side !== a.side && part.side !== 'C') continue;
+      if (roles.get(part) !== 'principal') roles.set(part, a.role);
+    }
+  }
+  // Si hay estructuras profundas afectadas, las capas externas afectadas se muestran translúcidas
+  roles.hasDeep = [...roles.keys()].some((p) => p.layer === 'deep');
+  return roles;
+}
+
+/** Colorea las piezas según su papel en la patología; el resto queda como contexto translúcido. */
+function pathologyStyle(roles, part, opacity) {
+  const role = roles.get(part);
+  if (!role) return { color: GHOST_COLOR, opacity: Math.min(opacity, 0.12) };
+  const outer = part.layer === 'cortex' || part.layer === 'white';
+  let o = outer && roles.hasDeep ? 0.32 : 1;
+  // La sustancia blanca es muy voluminosa: si solo está relacionada, se deja entrever lo demás
+  if (part.layer === 'white' && role !== 'principal') o = Math.min(o, 0.4);
+  return { color: role === 'principal' ? PATHOLOGY_PRINCIPAL : PATHOLOGY_RELATED, opacity: o };
 }
 
 /**
@@ -33,6 +63,8 @@ export function buildAppearance(state, { partsOf, parts }) {
   const isMember = (id) => !!category && !!STRUCTURE_BY_ID[id]?.categories?.includes(category.id);
   // Si la función incluye estructuras profundas, la corteza implicada se muestra translúcida
   const categoryHasDeep = !!category && parts.some((p) => p.layer === 'deep' && isMember(p.id));
+  const pathology = state.pathology ? PATHOLOGY_BY_ID[state.pathology] : null;
+  const roles = pathology ? pathologyRoles(pathology, partsOf) : null;
   const d = state.depth;
 
   return (part) => {
@@ -58,6 +90,7 @@ export function buildAppearance(state, { partsOf, parts }) {
         color = GHOST_COLOR;
       }
     }
+    if (roles) ({ color, opacity } = pathologyStyle(roles, part, opacity));
     // Al desarmar, la sustancia blanca queda translúcida para no tapar las piezas profundas
     if (part.layer === 'white' && state.explode > 0.2 && !selected.has(part)) opacity = Math.min(opacity, 0.16);
     // Rayos X: al seleccionar algo profundo, las capas externas se vuelven translúcidas
@@ -87,6 +120,17 @@ export function buildAppearance(state, { partsOf, parts }) {
 /** Modo Estudiar: la estructura preguntada se resalta; el resto da contexto. */
 function buildStudyAppearance(state, partsOf) {
   const q = state.quiz;
+  if (q?.kind === 'pathology') {
+    // Antes de responder no se resalta nada (sería dar la respuesta)
+    const roles = q.answer ? pathologyRoles(PATHOLOGY_BY_ID[q.pathology], partsOf) : null;
+    const answerParts = new Set(q.answer ? partsOf(q.current) : []);
+    return (part) => {
+      let color = NATURAL[part.id] || NEUTRAL;
+      let opacity = part.layer === 'white' ? 0 : 1;
+      if (roles) ({ color, opacity } = pathologyStyle(roles, part, opacity));
+      return { opacity, color, emissive: 0, outline: answerParts.has(part) && opacity > 0, pickable: false, clip: null };
+    };
+  }
   const target = new Set(q?.current ? partsOf(q.current) : []);
   const deep = [...target].some((p) => p.layer === 'deep');
   return (part) => {

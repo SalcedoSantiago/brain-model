@@ -3,7 +3,9 @@ import { BrainViewer } from './viewer/BrainViewer.js';
 import { MODEL_CONFIG } from './data/modelConfig.js';
 import { STRUCTURE_BY_ID } from './data/structures.js';
 import { createStore, INITIAL_STATE } from './app/store.js';
-import { buildAppearance } from './app/appearance.js';
+import { buildAppearance, pathologyRoles } from './app/appearance.js';
+import { PATHOLOGY_BY_ID } from './data/pathologies.js';
+import { initPathologyList } from './ui/pathologies.js';
 import { initStructureList } from './ui/structureList.js';
 import { initInfoPanel } from './ui/infoPanel.js';
 import { initToolbar } from './ui/toolbar.js';
@@ -16,7 +18,9 @@ const $ = (sel) => document.querySelector(sel);
 const store = createStore(INITIAL_STATE);
 const viewer = new BrainViewer($('#viewport'), MODEL_CONFIG);
 const labels = initLabels($('#labels'), viewer);
-const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
+// Paneles desplegables (lista lateral) y ficha inferior (teléfonos): ver styles.css
+const hasDrawer = () => window.matchMedia('(max-width: 1100px)').matches;
+const isPhone = () => window.matchMedia('(max-width: 760px)').matches;
 
 // ------------------------------------------------------------------ índice estructura → piezas 3D
 const partsCache = new Map();
@@ -49,7 +53,7 @@ const app = {
     if (s.mode !== 'explore') return;
     let selection = [id];
     if (multi) selection = s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [id, ...s.selection];
-    const patch = { selection };
+    const patch = { selection, pathology: null };
     if (fromList) {
       // Seleccionar desde la lista garantiza que la estructura sea visible
       const own = partsOf(id);
@@ -64,7 +68,7 @@ const app = {
     updateLabel(hit);
     if (selection[0]) announce(`Seleccionado: ${STRUCTURE_BY_ID[selection[0]].name}`);
     if (focus && selection[0]) app.focus(selection[0]);
-    if (isMobile() && selection.length) document.body.classList.remove('show-left');
+    if (hasDrawer() && selection.length) document.body.classList.remove('show-left');
   },
 
   clearSelection() {
@@ -169,8 +173,43 @@ const app = {
   },
 
   setCategory(category) {
-    store.set({ category });
+    store.set({ category, pathology: null });
     if (category) announce(`Función resaltada: ${category}`);
+  },
+
+  // ---------------------------------------------------------------- patologías
+  setPathology(id) {
+    const s = store.get();
+    store.set({
+      pathology: id, selection: [], category: null, isolate: null, hidden: [], hemisphere: 'both',
+      depth: 0, view: s.view === 'interna' || s.view === 'limbica' ? 'anatomica' : s.view,
+    });
+    labels.hide();
+    if (!id) return;
+    announce(`Patología: ${PATHOLOGY_BY_ID[id].name}`);
+    if (hasDrawer()) document.body.classList.remove('show-left');
+    app.focusPathology();
+  },
+
+  /** Encuadra las estructuras principalmente afectadas (del lado afectado si está lateralizada). */
+  focusPathology() {
+    const p = PATHOLOGY_BY_ID[store.get().pathology];
+    if (!p) return;
+    const roles = pathologyRoles(p, partsOf);
+    const principal = [...roles].filter(([, r]) => r === 'principal').map(([part]) => part);
+    const first = p.affected.find((a) => a.role === 'principal');
+    const dir = [...focusView(first.id).dir];
+    const sides = new Set(p.affected.filter((a) => a.role === 'principal').map((a) => a.side).filter(Boolean));
+    const side = sides.size === 1 ? ([...sides][0] === 'L' ? -1 : 1) : viewer.cameraSide();
+    if (!focusView(first.id).hemisphere) dir[0] = Math.abs(dir[0]) * side;
+    viewer.focusParts(principal, dir);
+    pathologyLabelPending = true;
+    // Por si la cámara no llega a animarse (p. ej. con movimiento reducido)
+    setTimeout(() => {
+      if (!pathologyLabelPending) return;
+      pathologyLabelPending = false;
+      updatePathologyLabel();
+    }, 900);
   },
 
   setHemisphere(hemisphere) {
@@ -209,7 +248,7 @@ const app = {
 
   resetAll() {
     store.set({
-      selection: [], hidden: [], isolate: null, category: null, hemisphere: 'both',
+      selection: [], hidden: [], isolate: null, category: null, pathology: null, hemisphere: 'both',
       explode: 0, dragMode: false, depth: 0, view: 'anatomica', autoRotate: false,
       section: { ...INITIAL_STATE.section },
     });
@@ -228,12 +267,12 @@ const app = {
 
   startStudy(setId = 'todas') {
     viewer.reassemble();
-    if (isMobile()) document.body.classList.add('sheet-expanded');
+    if (isPhone()) document.body.classList.add('sheet-expanded');
     const q = newQuestion(setId);
     store.set({
-      mode: 'study', selection: [], hidden: [], isolate: null, category: null, explode: 0, dragMode: false,
+      mode: 'study', selection: [], hidden: [], isolate: null, category: null, pathology: null, explode: 0, dragMode: false,
       depth: 0, view: 'anatomica', section: { ...INITIAL_STATE.section }, autoRotate: false,
-      hemisphere: focusView(q.current).hemisphere || 'both',
+      hemisphere: questionHemisphere(q),
       quiz: { ...q, set: setId, score: { right: 0, total: 0 } },
     });
     labels.hide();
@@ -243,8 +282,8 @@ const app = {
   nextQuestion(setId, reset = false) {
     const prev = store.get().quiz || {};
     const set = setId || prev.set || 'todas';
-    const q = newQuestion(set, prev.current);
-    const hemisphere = focusView(q.current).hemisphere || 'both';
+    const q = newQuestion(set, prev);
+    const hemisphere = questionHemisphere(q);
     store.set({ hemisphere, quiz: { ...q, set, score: reset || !prev.score ? { right: 0, total: 0 } : prev.score } });
     labels.hide();
     app.focusQuizTarget();
@@ -253,6 +292,8 @@ const app = {
   focusQuizTarget() {
     const q = store.get().quiz;
     if (!q) return;
+    // En las preguntas de patologías no se señala la estructura antes de responder
+    if (q.kind === 'pathology' && !q.answer) return viewer.resetView();
     const fv = focusView(q.current);
     const parts = partsOf(q.current).filter((p) => store.get().hemisphere === 'both' || p.side !== (store.get().hemisphere === 'L' ? 'R' : 'L'));
     const dir = [...fv.dir];
@@ -263,11 +304,16 @@ const app = {
   onQuizAnswered() {
     const q = store.get().quiz;
     const s = STRUCTURE_BY_ID[q.current];
+    if (q.kind === 'pathology') app.focusQuizTarget();
     const a = viewer.anchorFor(partsOf(q.current));
     if (a) labels.show(a, s.name, s.short);
     announce(q.answer === q.current ? 'Respuesta correcta' : `Respuesta incorrecta. Era ${s.name}`);
   },
 };
+
+function questionHemisphere(q) {
+  return q.kind === 'pathology' ? 'both' : focusView(q.current).hemisphere || 'both';
+}
 
 function zoomForExplode(amount) {
   const t = viewer.controls.target;
@@ -291,9 +337,23 @@ function updateLabel(hit) {
     a ? labels.show(a, s.name, s.short) : labels.hide();
   }
 }
+let pathologyLabelPending = false;
+function updatePathologyLabel() {
+  const p = PATHOLOGY_BY_ID[store.get().pathology];
+  if (!p) return;
+  const roles = pathologyRoles(p, partsOf);
+  const principal = [...roles].filter(([, r]) => r === 'principal').map(([part]) => part);
+  const a = viewer.anchorFor(principal);
+  const names = p.affected.filter((x) => x.role === 'principal').map((x) => STRUCTURE_BY_ID[x.id].name);
+  if (a) labels.show(a, p.name, `Afectación principal: ${names.join(', ')}`);
+}
 viewer.on('cameraend', () => {
   const s = store.get();
-  if (s.mode === 'explore' && s.selection[0] && !labelFromClick) updateLabel(null);
+  if (s.mode !== 'explore') return;
+  if (s.pathology && pathologyLabelPending) {
+    pathologyLabelPending = false;
+    updatePathologyLabel();
+  } else if (s.selection[0] && !labelFromClick) updateLabel(null);
 });
 
 // ------------------------------------------------------------------ eventos del visor
@@ -326,6 +386,7 @@ const renderInfo = initInfoPanel($('#info'), app);
 const renderQuiz = initQuiz($('#info'), app);
 const renderToolbar = initToolbar($('#controls'), app);
 const renderLegend = initLegend($('#legend'), app);
+const renderPathologies = initPathologyList($('#pane-pathologies'), app);
 initOrientation($('#orientation'), viewer);
 
 const viewButtons = [...document.querySelectorAll('[data-view]')];
@@ -346,10 +407,10 @@ function renderChrome(s) {
   $('#view-select').value = s.view;
   document.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.mode === s.mode));
   document.body.classList.toggle('is-study', s.mode === 'study');
-  document.body.classList.toggle('has-selection', s.mode === 'study' || s.selection.length > 0);
+  document.body.classList.toggle('has-selection', s.mode === 'study' || s.selection.length > 0 || !!s.pathology);
   $('#btn-left').setAttribute('aria-expanded', document.body.classList.contains('show-left'));
   $('#sheet-handle').setAttribute('aria-expanded', document.body.classList.contains('sheet-expanded'));
-  const sel = s.selection[0] ? STRUCTURE_BY_ID[s.selection[0]].name : s.mode === 'study' ? 'Estudiar' : 'Información';
+  const sel = s.mode === 'study' ? 'Estudiar' : s.pathology ? PATHOLOGY_BY_ID[s.pathology].name : s.selection[0] ? STRUCTURE_BY_ID[s.selection[0]].name : 'Información';
   $('#sheet-title').textContent = sel;
   updateInset();
 }
@@ -377,6 +438,7 @@ store.subscribe((s) => {
   s.mode === 'study' ? renderQuiz(s) : renderInfo(s);
   renderToolbar(s);
   renderLegend(s);
+  renderPathologies(s);
   // Si la pieza que ancla la etiqueta deja de verse, buscar otro anclaje
   const a = labels.anchor;
   if (s.mode === 'explore' && a && a.part.tgt.opacity === 0 && s.selection[0]) {
@@ -391,7 +453,10 @@ document.addEventListener('keydown', (e) => {
   const s = store.get();
   if (e.key === 'Escape') {
     document.body.classList.remove('show-left');
-    if (s.mode === 'explore') app.clearSelection();
+    if (s.mode === 'explore') {
+      if (s.pathology) app.setPathology(null);
+      app.clearSelection();
+    }
     return;
   }
   if (s.mode !== 'explore') return;

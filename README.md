@@ -19,7 +19,8 @@ npm run generate:model   # regenera public/models/brain.glb
 - **Corte**: planos sagital, coronal y axial con posición regulable; las superficies de corte se muestran sólidas.
 - **Hemisferios**: ambos, izquierdo o derecho (con corte en la línea media para ver la cara medial).
 - **Funciones**: filtra y resalta las estructuras implicadas en memoria, emociones, lenguaje, etc.
-- **Estudiar**: preguntas «¿Qué estructura es esta?» con explicación; temas por lóbulos, estructuras subcorticales, sistema límbico, tronco y cerebelo, o por función.
+- **Patologías**: 27 enfermedades y trastornos (neurodegenerativos, cerebrovasculares, síndromes focales, epilepsia, psiquiátricos, del neurodesarrollo…). Al elegir una, el modelo resalta en rojo las estructuras principalmente afectadas y en ámbar las relacionadas, respetando la lateralización (p. ej., afasia de Broca en el hemisferio izquierdo). Se puede filtrar por estructura afectada y cada ficha de estructura enlaza sus patologías. Se distingue entre **lesión o degeneración** y **asociación en estudios** (trastornos psiquiátricos y del neurodesarrollo).
+- **Estudiar**: preguntas «¿Qué estructura es esta?» con explicación; temas por lóbulos, estructuras subcorticales, sistema límbico, tronco y cerebelo, por función, o «Patologías: ¿qué estructura se afecta?».
 - Teclado: flechas (rotar), + / − (zoom), H (ocultar selección), I (aislar), E (desarmar), F (centrar), R (restablecer), Esc (deseleccionar).
 
 ## Arquitectura
@@ -29,6 +30,7 @@ src/
   data/
     structures.js    Contenido educativo (ubicación, función, relación psicológica, ejemplo…)
     categories.js    Categorías funcionales
+    pathologies.js   Patologías: estructuras afectadas (principal / relacionada, lado), mecanismo, síntomas…
     modelConfig.js   Todo lo que depende del GLB: nombres de mallas, capas, explosión, cámaras
     palettes.js      Colores por modo de visualización
   viewer/

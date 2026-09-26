@@ -23,6 +23,7 @@ export const INITIAL_STATE = {
   hidden: [], // ids ocultos (estructuras o grupos)
   isolate: null, // ids aislados o null
   category: null, // categoría funcional resaltada
+  pathology: null, // patología resaltada
   hemisphere: 'both', // both | L | R
   explode: 0, // 0..1
   dragMode: false, // arrastrar piezas para desarmar

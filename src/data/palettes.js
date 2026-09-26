@@ -50,5 +50,8 @@ export const LIMBIC = {
 };
 
 export const SELECTION_COLOR = '#0e9fb3';
+/** Patologías: afectación principal y relacionada. */
+export const PATHOLOGY_PRINCIPAL = '#c8332c';
+export const PATHOLOGY_RELATED = '#eea43c';
 export const GHOST_COLOR = '#c9ccd1';
 export const NEUTRAL = '#d4ccc6';

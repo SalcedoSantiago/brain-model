@@ -1,6 +1,7 @@
 import { CATEGORIES, CATEGORY_BY_ID } from '../data/categories.js';
 import { STRUCTURE_BY_ID } from '../data/structures.js';
-import { LOBES, LIMBIC } from '../data/palettes.js';
+import { LOBES, LIMBIC, PATHOLOGY_PRINCIPAL, PATHOLOGY_RELATED } from '../data/palettes.js';
+import { PATHOLOGY_BY_ID } from '../data/pathologies.js';
 
 /** Leyenda de colores del modo de visualización activo. */
 export function initLegend(el, app) {
@@ -12,12 +13,18 @@ export function initLegend(el, app) {
   });
   let last = '';
   return function render(s) {
-    const key = `${s.mode}|${s.view}|${s.category}`;
+    const key = `${s.mode}|${s.view}|${s.category}|${s.pathology}`;
     if (key === last) return;
     last = key;
     let title = '', items = [];
     if (s.mode !== 'explore') items = [];
-    else if (s.category) {
+    else if (s.pathology) {
+      title = PATHOLOGY_BY_ID[s.pathology].name;
+      items = [
+        { color: PATHOLOGY_PRINCIPAL, label: 'Afectación principal' },
+        { color: PATHOLOGY_RELATED, label: 'Afectación relacionada' },
+      ];
+    } else if (s.category) {
       const c = CATEGORY_BY_ID[s.category];
       title = `Función: ${c.name}`;
       items = [{ color: c.color, label: 'Estructuras que participan' }];
@@ -35,7 +42,7 @@ export function initLegend(el, app) {
     el.innerHTML = items.length
       ? `<h3>${title}</h3><ul>${items
           .map((i) => `<li><button ${i.id ? `data-id="${i.id}"` : i.cat ? `data-cat="${i.cat}"` : 'disabled'}><span class="lg-dot" style="background:${i.color}"></span>${i.label}</button></li>`)
-          .join('')}</ul>${s.view === 'funcional' && !s.category ? '<p>Color según la función principal; la mayoría de estructuras participan en varias.</p>' : ''}`
+          .join('')}</ul>${s.view === 'funcional' && !s.category && !s.pathology ? '<p>Color según la función principal; la mayoría de estructuras participan en varias.</p>' : ''}`
       : '';
   };
 }

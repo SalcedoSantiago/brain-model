@@ -297,16 +297,17 @@ button {
 .panel-tabs {
   display: flex;
   border-bottom: 1px solid var(--border);
-  padding: 0 12px;
+  padding: 0 8px;
   flex: none;
 }
 .panel-tab {
   flex: 1;
   border: 0;
   background: none;
-  padding: 12px 6px 10px;
+  padding: 12px 2px 10px;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 13px;
+  white-space: nowrap;
   color: var(--muted);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
@@ -496,6 +497,8 @@ button {
 
 /* ------------------------------------------------------------------ escenario 3D */
 .stage {
+  container-type: size;
+  container-name: stage;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -1094,6 +1097,179 @@ button {
   color: var(--psych);
 }
 
+/* ------------------------------------------------------------------ patologías */
+.role-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--c);
+  flex: none;
+  vertical-align: -1px;
+}
+.patho-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 10px 0 2px;
+}
+.field.compact {
+  margin: 0;
+  font-size: 11.5px;
+}
+.field.compact select {
+  font-size: 13px;
+  padding: 6px 26px 6px 8px;
+  background-position: right 8px center;
+}
+.patho-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.patho-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+}
+.patho-item:hover {
+  border-color: #d9a39f;
+}
+.patho-item[aria-pressed='true'] {
+  border-color: #c8332c;
+  background: #fbefee;
+}
+.patho-name {
+  font-weight: 500;
+  grid-column: 1;
+}
+.patho-sub {
+  grid-column: 1;
+  font-size: 12px;
+  color: var(--muted);
+}
+.evidence-mini {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--psych);
+  background: #f4ecf7;
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+.patho-disclaimer {
+  margin: 14px 4px 0;
+}
+.evidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 3px 10px;
+  margin-bottom: 12px;
+}
+.evidence .icon {
+  width: 14px;
+  height: 14px;
+}
+.evidence.lesion {
+  background: #fbefee;
+  color: #a12a24;
+}
+.evidence.asociacion {
+  background: #f4ecf7;
+  color: var(--psych);
+}
+.evidence-note {
+  background: #f8f3fa;
+  border: 1px solid #e6d6ec;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+.affected {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.affected-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+}
+.affected-item .role-dot {
+  margin-top: 5px;
+}
+.affected-item p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #3b4452;
+}
+.affected-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.affected-head .link-btn {
+  font-weight: 600;
+}
+.affected-head .text-btn {
+  margin-left: auto;
+}
+.role-tag {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 0 7px;
+}
+.role-tag.principal {
+  background: #fbefee;
+  color: #a12a24;
+}
+.role-tag.relacionada {
+  background: #fdf3e3;
+  color: #93600f;
+}
+.text-btn.small {
+  font-size: 12px;
+}
+.chip.patho {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--c) 45%, white);
+  gap: 6px;
+}
+.chip.patho::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.chip.patho:hover {
+  background: color-mix(in srgb, var(--c) 9%, white);
+}
+.quiz-clue {
+  margin: 6px 0 4px;
+}
+
 /* ------------------------------------------------------------------ modo Estudiar */
 .quiz-head {
   display: flex;
@@ -1384,6 +1560,26 @@ button {
     transform: none;
     white-space: normal;
     max-width: calc(100% - 110px);
+  }
+}
+
+/* Barra compacta cuando el visor es estrecho, sea cual sea el ancho de la ventana */
+@container stage (max-width: 820px) {
+  .tool span {
+    display: none;
+  }
+  .tool {
+    min-width: 40px;
+    height: 40px;
+  }
+  .toolbar {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .toolbar:has(.menu:not([hidden])) {
+    overflow: visible;
   }
 }
 

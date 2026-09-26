@@ -11,6 +11,7 @@ export function initStructureList(root, app) {
     <div class="panel-tabs" role="tablist" aria-label="Navegación">
       <button role="tab" id="tab-structures" aria-controls="pane-structures" aria-selected="true" class="panel-tab">Estructuras</button>
       <button role="tab" id="tab-functions" aria-controls="pane-functions" aria-selected="false" class="panel-tab" tabindex="-1">Funciones</button>
+      <button role="tab" id="tab-pathologies" aria-controls="pane-pathologies" aria-selected="false" class="panel-tab" tabindex="-1">Patologías</button>
     </div>
     <div id="pane-structures" role="tabpanel" aria-labelledby="tab-structures" class="panel-pane">
       <label class="search">
@@ -24,10 +25,15 @@ export function initStructureList(root, app) {
       <p class="pane-intro">Elige una función para resaltar en el modelo las estructuras que participan en ella.</p>
       <div class="category-list" role="list"></div>
       <div class="category-detail"></div>
-    </div>`;
+    </div>
+    <div id="pane-pathologies" role="tabpanel" aria-labelledby="tab-pathologies" class="panel-pane" hidden></div>`;
 
   const tabs = [...root.querySelectorAll('[role=tab]')];
-  const panes = { 'tab-structures': root.querySelector('#pane-structures'), 'tab-functions': root.querySelector('#pane-functions') };
+  const panes = {
+    'tab-structures': root.querySelector('#pane-structures'),
+    'tab-functions': root.querySelector('#pane-functions'),
+    'tab-pathologies': root.querySelector('#pane-pathologies'),
+  };
   const selectTab = (tab) => {
     tabs.forEach((t) => {
       const on = t === tab;
@@ -40,13 +46,15 @@ export function initStructureList(root, app) {
     t.addEventListener('click', () => selectTab(t));
     t.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-        const next = tabs[(tabs.indexOf(t) + 1) % tabs.length];
+        const step = e.key === 'ArrowRight' ? 1 : tabs.length - 1;
+        const next = tabs[(tabs.indexOf(t) + step) % tabs.length];
         selectTab(next);
         next.focus();
       }
     });
   });
   app.showFunctionsTab = () => selectTab(tabs[1]);
+  app.showPathologiesTab = () => selectTab(tabs[2]);
 
   // ---------------------------------------------------------------- estructuras
   const sectionsEl = root.querySelector('.structure-sections');

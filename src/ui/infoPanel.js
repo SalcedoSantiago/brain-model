@@ -1,6 +1,8 @@
 import { STRUCTURES, STRUCTURE_BY_ID, KIND_LABELS } from '../data/structures.js';
 import { CATEGORY_BY_ID } from '../data/categories.js';
 import { ICONS } from './icons.js';
+import { PATHOLOGY_BY_ID } from '../data/pathologies.js';
+import { pathologyCard, relatedPathologiesSection } from './pathologies.js';
 
 /** Panel derecho: ficha educativa de la estructura seleccionada. */
 export function initInfoPanel(root, app) {
@@ -18,16 +20,21 @@ export function initInfoPanel(root, app) {
     if (action === 'focus') app.focus(id);
     if (action === 'clear') app.clearSelection();
     if (action === 'study') app.startStudy();
+    if (action === 'pathology') app.setPathology(id);
+    if (action === 'patho-focus') app.focusPathology();
+    if (action === 'patho-close') app.setPathology(null);
+    if (action === 'patho-structure') app.focus(id);
   });
 
   let lastKey = '';
   return function render(state) {
     if (state.mode !== 'explore') return;
     const id = state.selection[0];
-    const key = `${id}|${state.hidden.join()}|${(state.isolate || []).join()}|${state.selection.length}`;
+    const key = `${state.pathology}|${id}|${state.hidden.join()}|${(state.isolate || []).join()}|${state.selection.length}`;
     if (key === lastKey) return;
     lastKey = key;
-    root.innerHTML = id ? detail(STRUCTURE_BY_ID[id], state, app) : welcome();
+    if (state.pathology) root.innerHTML = pathologyCard(PATHOLOGY_BY_ID[state.pathology]);
+    else root.innerHTML = id ? detail(STRUCTURE_BY_ID[id], state, app) : welcome();
     root.scrollTop = 0;
   };
 }
@@ -42,6 +49,7 @@ function welcome() {
         <li><strong>Rota</strong> arrastrando y haz <strong>zoom</strong> con la rueda o con dos dedos.</li>
         <li><strong>Desarma</strong> el cerebro con el botón ${ICONS.explode.replace('width="18" height="18"', 'width="15" height="15"')} o activa ${ICONS.hand.replace('width="18" height="18"', 'width="15" height="15"')} <em>Mover piezas</em> para sacar cada parte con el ratón o el dedo.</li>
         <li>Usa la <strong>vista interna</strong> o el <strong>corte</strong> para descubrir las estructuras profundas.</li>
+        <li>En la pestaña <strong>Patologías</strong> verás qué partes del cerebro se afectan en cada enfermedad o trastorno.</li>
       </ol>
       <div class="legend-types">
         <div class="type-row"><span class="type-tag anat">${ICONS.anatomy} Anatomía</span><span>dónde está y cómo es</span></div>
@@ -96,6 +104,8 @@ function detail(s, state, app) {
         <h3>${ICONS.example} Ejemplo</h3>
         <p>${s.example}</p>
       </section>
+
+      ${relatedPathologiesSection(s.id)}
 
       ${
         s.categories.length
