@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Atlas 3D interactivo del encéfalo para estudiantes de Psicología: explora, desarma y estudia sus estructuras y funciones." />
+    <meta name="theme-color" content="#f4f3ef" />
+    <title>NeuroAtlas 3D</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%231f4e8c'/%3E%3Cpath d='M16 7c-3 0-5 2-5 4-2 0-3.5 1.6-3.5 3.6 0 1 .4 1.8 1 2.4-.6.6-1 1.5-1 2.5C7.5 21.8 9.3 24 12 24c1 0 2-.4 2.6-1H16V7zm0 0c3 0 5 2 5 4 2 0 3.5 1.6 3.5 3.6 0 1-.4 1.8-1 2.4.6.6 1 1.5 1 2.5 0 2.3-1.8 4.5-4.5 4.5-1 0-2-.4-2.6-1H16' fill='none' stroke='%23fff' stroke-width='1.6'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet" />
+    <script type="module" crossorigin src="./assets/index-BWuhgv4P.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DhCx_vUP.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#viewport">Ir al modelo 3D</a>
+    <div class="app">
+      <header class="topbar">
+        <button id="btn-left" class="icon-btn only-mobile" aria-label="Lista de estructuras" aria-controls="panel-left" aria-expanded="false">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </button>
+        <div class="brand">
+          <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" /><path d="M16 7c-3 0-5 2-5 4-2 0-3.5 1.6-3.5 3.6 0 1 .4 1.8 1 2.4-.6.6-1 1.5-1 2.5C7.5 21.8 9.3 24 12 24c1 0 2-.4 2.6-1H16V7zm0 0c3 0 5 2 5 4 2 0 3.5 1.6 3.5 3.6 0 1-.4 1.8-1 2.4.6.6 1 1.5 1 2.5 0 2.3-1.8 4.5-4.5 4.5-1 0-2-.4-2.6-1H16" /></svg>
+          <div>
+            <h1>NeuroAtlas 3D</h1>
+            <p>Anatomía del encéfalo para Psicología</p>
+          </div>
+        </div>
+        <nav class="view-modes" aria-label="Modo de visualización">
+          <div class="seg seg-views" role="radiogroup" aria-label="Modo de visualización">
+            <button role="radio" data-view="anatomica" aria-checked="true">Anatómica</button>
+            <button role="radio" data-view="lobulos" aria-checked="false">Lóbulos</button>
+            <button role="radio" data-view="areas" aria-checked="false">Áreas</button>
+            <button role="radio" data-view="interna" aria-checked="false">Interna</button>
+            <button role="radio" data-view="limbica" aria-checked="false">Límbica</button>
+            <button role="radio" data-view="funcional" aria-checked="false">Funcional</button>
+            <button role="radio" data-view="explodida" aria-checked="false">Desarmada</button>
+          </div>
+          <label class="view-select-wrap">
+            <span class="sr-only">Modo de visualización</span>
+            <select id="view-select">
+              <option value="anatomica">Vista anatómica</option>
+              <option value="lobulos">Vista por lóbulos</option>
+              <option value="areas">Vista por áreas</option>
+              <option value="interna">Vista interna</option>
+              <option value="limbica">Vista límbica</option>
+              <option value="funcional">Vista funcional</option>
+              <option value="explodida">Vista desarmada</option>
+            </select>
+          </label>
+        </nav>
+        <div class="seg mode-switch" role="group" aria-label="Modo de uso">
+          <button data-mode="explore" aria-pressed="true">Explorar</button>
+          <button data-mode="study" aria-pressed="false">Estudiar</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside id="panel-left" class="panel panel-left" aria-label="Estructuras y funciones"></aside>
+
+        <section class="stage" aria-label="Visor 3D">
+          <div id="viewport" class="viewport"></div>
+          <div id="labels" class="labels-layer"></div>
+          <div id="legend" class="legend" hidden></div>
+          <div id="orientation" class="orientation"></div>
+          <p id="hint" class="hint">Arrastra para rotar · rueda o pellizco para zoom · clic para seleccionar</p>
+          <div id="controls" class="controls-dock"></div>
+          <div id="loader" class="loader" role="status">
+            <div class="loader-card">
+              <p>Cargando modelo 3D del encéfalo…</p>
+              <div class="bar"><span></span></div>
+            </div>
+          </div>
+        </section>
+
+        <aside id="panel-right" class="panel panel-right" aria-label="Información de la estructura">
+          <button id="sheet-handle" class="sheet-handle only-mobile" aria-expanded="false" aria-controls="info">
+            <span class="sheet-grip" aria-hidden="true"></span>
+            <span id="sheet-title">Información</span>
+          </button>
+          <div id="info" class="panel-scroll"></div>
+        </aside>
+      </main>
+      <div id="scrim" class="scrim"></div>
+      <div id="sr-status" class="sr-only" aria-live="polite"></div>
+    </div>
+  </body>
+</html>
